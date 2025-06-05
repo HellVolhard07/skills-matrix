@@ -12,7 +12,7 @@ services:
     volumes:
       # Optional: Mount your code for easier development (live changes without rebuild)
       # Comment out for production builds to keep images smaller and immutable
-      - ./user_service:/app
+      - ./user_service:/app/user_service
     environment:
       # Example: Set environment variables for logging level if needed
       PYTHONUNBUFFERED: 1 # Ensures Python output is not buffered

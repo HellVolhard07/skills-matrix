@@ -5,7 +5,7 @@
 # Define variables
 USER_SERVICE_DIR := user_service
 GATEWAY_DIR := gateway
-PROTO_FILE := $(USER_SERVICE_DIR)/user_service.proto
+PROTO_FILE := user_service.proto
 
 # Default target
 all: up
@@ -13,13 +13,19 @@ all: up
 # Generate protobuf files
 proto:
 	@echo "Generating Python protobuf and gRPC stubs..."
+	# Clean up any previously mis-generated nested directories or files in the wrong place
+	# This ensures a clean slate before regeneration
+	rm -f $(USER_SERVICE_DIR)/user_service_pb2.py || true
+	rm -f $(USER_SERVICE_DIR)/user_service_pb2_grpc.py || true
+
+	# Temporarily change directory to user_service for the protoc command
+	# This makes the paths simpler for protoc to interpret.
+	cd $(USER_SERVICE_DIR) && \
 	python -m grpc_tools.protoc \
-	    -I. \
-	    -I$(USER_SERVICE_DIR) \
-	    -I./proto \
-	    --python_out=$(USER_SERVICE_DIR) \
-	    --grpc_python_out=$(USER_SERVICE_DIR) \
-	    $(PROTO_FILE)
+	    -I. \                     # Now, '.' refers to the 'user_service' directory
+	    --python_out=. \          # Output to the current directory (user_service)
+	    --grpc_python_out=. \     # Output to the current directory (user_service)
+	    $(PROTO_FILE)             # Input file is now simply user_service.proto (relative to user_service dir)
 	@echo "Applying manual fix to $(USER_SERVICE_DIR)/user_service_pb2_grpc.py..."
 	# This sed command is for Linux/macOS. For Windows, you might need a different tool or manual edit.
 	# It replaces 'import user_service_pb2' with 'from . import user_service_pb2'
