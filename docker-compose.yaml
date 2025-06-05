@@ -1,0 +1,39 @@
+# docker-compose.yaml
+version: '3.8'
+
+services:
+  user_service:
+    build:
+      context: ./user_service # Build context points to the user_service directory
+      dockerfile: Dockerfile  # Specifies the Dockerfile within that context
+    container_name: skillmetrix_user_service
+    ports:
+      - "50052:50052" # Host_port:Container_port
+    volumes:
+      # Optional: Mount your code for easier development (live changes without rebuild)
+      # Comment out for production builds to keep images smaller and immutable
+      - ./user_service:/app
+    environment:
+      # Example: Set environment variables for logging level if needed
+      PYTHONUNBUFFERED: 1 # Ensures Python output is not buffered
+    networks:
+      - skillmetrix_network
+
+  # Add other services here later (e.g., auth_service, gateway)
+  # gateway:
+  #   build:
+  #     context: ./gateway
+  #     dockerfile: Dockerfile
+  #   container_name: skillmetrix_gateway
+  #   ports:
+  #     - "5000:5000"
+  #   volumes:
+  #     - ./gateway:/app
+  #   depends_on:
+  #     - user_service # Gateway depends on user_service being up
+  #   networks:
+  #     - skillmetrix_network
+
+networks:
+  skillmetrix_network:
+    driver: bridge
