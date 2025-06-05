@@ -3,8 +3,6 @@ package data
 import (
 	"errors"
 	"strings"
-
-	"golang.org/x/crypto/bcrypt"
 )
 
 func New() Models {
@@ -41,16 +39,21 @@ func (u *User) GetByEmail(email string) (*User, error) {
 }
 
 func (u *User) PasswordMatches(plainText string) (bool, error) {
-	err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(plainText))
-	if err != nil {
-		switch {
-		case errors.Is(err, bcrypt.ErrMismatchedHashAndPassword):
-			// invalid password
-			return false, nil
-		default:
-			return false, err
-		}
+
+	if u.Password != plainText {
+		return false, errors.New("incorrect password")
 	}
+
+	// err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(plainText))
+	// if err != nil {
+	// 	switch {
+	// 	case errors.Is(err, bcrypt.ErrMismatchedHashAndPassword):
+	// 		// invalid password
+	// 		return false, nil
+	// 	default:
+	// 		return false, err
+	// 	}
+	// }
 
 	return true, nil
 }
