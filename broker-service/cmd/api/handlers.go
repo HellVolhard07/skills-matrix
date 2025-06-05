@@ -1,20 +1,34 @@
 package main
 
 import (
+	"broker/contact"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
+	"time"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 type RequestPayload struct {
-	Action string      `json:"action"`
-	Auth   AuthPayload `json:"auth,omitempty"`
+	Action  string         `json:"action"`
+	Auth    AuthPayload    `json:"auth,omitempty"`
+	Contact ContactPayload `json:"contact,omitempty"`
 }
 
 type AuthPayload struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
+}
+
+type ContactPayload struct {
+	SenderId   string `json:"sender"`
+	ReceiverId string `json:"receiver"`
+	Subject    string `json:"subject"`
+	Message    string `json:"message"`
 }
 
 func (app *Config) HandleRequest(w http.ResponseWriter, r *http.Request) {
@@ -29,6 +43,8 @@ func (app *Config) HandleRequest(w http.ResponseWriter, r *http.Request) {
 	switch requestPayload.Action {
 	case "auth":
 		app.authenticate(w, requestPayload.Auth)
+	case "contact":
+		app.contactHandler(w, requestPayload.Contact)
 	default:
 		app.errorJSON(w, errors.New("unknown action"))
 	}
@@ -80,6 +96,39 @@ func (app *Config) authenticate(w http.ResponseWriter, a AuthPayload) {
 		Error:   false,
 		Message: "Authenticated",
 		Data:    jsonFromService.Data,
+	}
+
+	app.writeJSON(w, http.StatusAccepted, payload)
+}
+
+func (app *Config) contactHandler(w http.ResponseWriter, cp ContactPayload) {
+
+	conn, err := grpc.NewClient("contact-service:50001", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+	defer conn.Close()
+
+	c := contact.NewContactServiceClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err = c.SendContactRequest(ctx, &contact.ContactRequest{
+		SenderId:   cp.SenderId,
+		ReceiverId: cp.ReceiverId,
+		Subject:    cp.Subject,
+		Message:    cp.Message,
+	})
+
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+
+	payload := jsonResponse{
+		Error:   false,
+		Message: "Email sent",
 	}
 
 	app.writeJSON(w, http.StatusAccepted, payload)

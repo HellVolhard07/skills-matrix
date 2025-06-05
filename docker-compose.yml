@@ -21,3 +21,12 @@ services:
     deploy:
       mode: replicated
       replicas: 1
+
+  contact-service:
+    build:
+      context: ./contact-service
+      dockerfile: /contact-service.dockerfile
+    restart: always
+    deploy:
+      mode: replicated
+      replicas: 1
