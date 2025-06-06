@@ -57,7 +57,7 @@ services:
   user_service:
     build:
       context: ./user_service
-      dockerfile: Dockerfile
+      dockerfile: user_service.dockerfile
     container_name: skillmetrix_user_service
     ports:
       - "50052:50052"

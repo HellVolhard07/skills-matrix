@@ -43,15 +43,11 @@ clean_docker:
 
 build_user_service:
 	@echo "Building user_service Docker image..."
-	docker build -t skillmetrix_user_service -f $(USER_SERVICE_DIR)/Dockerfile $(USER_SERVICE_DIR)
+	docker build -t skillmetrix_user_service -f $(USER_SERVICE_DIR)/user_service.dockerfile $(USER_SERVICE_DIR)
 
-run_user_service_local:
-	@echo "Running User Service locally..."
-	python -m $(USER_SERVICE_DIR).server
-
-run_user_service_docker: build_user_service
-	@echo "Running User Service via Docker Compose..."
-	docker compose up --build user_service
+run_user_service:
+	@echo "Running User Service container..."
+	docker run --rm -d --name skillmetrix_user_service -p 50052:50052 skillmetrix_user_service
 
 # test_user_service:
 # 	@echo "Running User Service unit tests..."
