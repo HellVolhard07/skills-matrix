@@ -51,10 +51,10 @@ services:
       mode: replicated
       replicas: 1
 
-  user-service:
+  user_service:
     build:
-      context: ./user-service
-      dockerfile: /user-service.dockerfile
+      context: ./user_service
+      dockerfile: /user_service.dockerfile
     restart: always
     ports:
       - "50052:50052"
