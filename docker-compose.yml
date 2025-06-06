@@ -58,6 +58,8 @@ services:
     restart: always
     ports:
       - "50052:50052"
+    volumes:
+      - ./user_service:/app/user_service
     deploy:
       mode: replicated
       replicas: 1
@@ -67,3 +69,7 @@ services:
     ports:
       - "1025:1025"
       - "8025:8025"
+
+networks:
+  skillmetrix_network:
+    driver: bridge
