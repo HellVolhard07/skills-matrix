@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+option go_package = "." ;// Adjust this path as needed
+
+package skill;
+
+// Represents a single skill
+message Skill {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+}
+
+// Request to add a skill to a user
+message AddSkillRequest {
+  string user_id = 1;
+  Skill skill = 2; // The skill to add
+}
+
+// Request to remove a skill from a user
+message RemoveSkillRequest {
+  string user_id = 1;
+  string skill_id = 2; // The ID of the skill to remove
+}
+
+// Request to get skills for a specific user
+message GetSkillsByUserRequest {
+  string user_id = 1;
+}
+
+// A list of skills
+message SkillList {
+  repeated Skill skills = 1;
+}
+
+// A generic empty message for methods that don't return any specific data
+message Empty {}
+
+// The SkillService definition
+service SkillService {
+  rpc AddSkillToUser(AddSkillRequest) returns (Skill);
+  rpc RemoveSkillFromUser(RemoveSkillRequest) returns (Empty);
+  rpc GetSkillsByUser(GetSkillsByUserRequest) returns (SkillList);
+  rpc GetAllSkills(Empty) returns (SkillList);
+}
