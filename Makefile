@@ -1,72 +1,95 @@
-# Makefile
+.PHONY: build_user_service run_user_service_local run_user_service_docker test_user_service clean_docker \
+        build_broker build_auth build_contact build_front start stop up up_build down
 
-.PHONY: proto build_user_service run_user_service_local run_user_service_docker test_user_service clean_docker up down
+SHELL=cmd.exe
+FRONT_END_BINARY=frontApp.exe
+BROKER_BINARY=brokerApp
+AUTH_BINARY=authApp
+CONTACT_BINARY=contactApp
 
-# Define variables
 USER_SERVICE_DIR := user_service
-GATEWAY_DIR := gateway
-PROTO_FILE := user_service.proto
 
-# Default target
-all: up
+## ====================
+## Docker Compose
+## ====================
 
-# Generate protobuf files
-proto:
-	@echo "Generating Python protobuf and gRPC stubs..."
-	# Clean up any previously mis-generated nested directories or files in the wrong place
-	# This ensures a clean slate before regeneration
-	rm -f $(USER_SERVICE_DIR)/user_service_pb2.py || true
-	rm -f $(USER_SERVICE_DIR)/user_service_pb2_grpc.py || true
+up:
+	@echo Starting Docker images...
+	docker compose up -d
+	@echo Docker images started!
 
-	# Temporarily change directory to user_service for the protoc command
-	# This makes the paths simpler for protoc to interpret.
-	cd $(USER_SERVICE_DIR) && \
-	python -m grpc_tools.protoc \
-	    -I. \                     # Now, '.' refers to the 'user_service' directory
-	    --python_out=. \          # Output to the current directory (user_service)
-	    --grpc_python_out=. \     # Output to the current directory (user_service)
-	    $(PROTO_FILE)             # Input file is now simply user_service.proto (relative to user_service dir)
-	@echo "Applying manual fix to $(USER_SERVICE_DIR)/user_service_pb2_grpc.py..."
-	# This sed command is for Linux/macOS. For Windows, you might need a different tool or manual edit.
-	# It replaces 'import user_service_pb2' with 'from . import user_service_pb2'
-	# Be very careful if running on Windows without a suitable 'sed' equivalent (e.g., Git Bash provides it)
-	# Find more robust cross-platform ways if this causes issues.
-	sed -i 's/^import user_service_pb2 as user__service__pb2/from . import user_service_pb2 as user__service__pb2/' $(USER_SERVICE_DIR)/user_service_pb2_grpc.py || true
+up_build: build_broker build_auth build_contact build_user_service
+	@echo Stopping docker images (if running...)
+	docker compose down
+	@echo Building (when required) and starting docker images...
+	docker compose up --build -d
+	@echo Docker images built and started!
 
-# Build User Service Docker image
-build_user_service: proto
+down:
+	@echo Stopping docker compose...
+	docker compose down
+	@echo Done!
+
+clean_docker:
+	@echo Cleaning Docker images and containers...
+	docker stop skillmetrix_user_service || true
+	docker rm skillmetrix_user_service || true
+	docker rmi skillmetrix_user_service || true
+	docker system prune -f --volumes
+
+## ====================
+## User Service
+## ====================
+
+build_user_service:
 	@echo "Building user_service Docker image..."
 	docker build -t skillmetrix_user_service -f $(USER_SERVICE_DIR)/Dockerfile $(USER_SERVICE_DIR)
 
-# Run User Service locally (without Docker)
-run_user_service_local: proto
+run_user_service_local:
 	@echo "Running User Service locally..."
 	python -m $(USER_SERVICE_DIR).server
 
-# Run User Service using Docker Compose
 run_user_service_docker: build_user_service
 	@echo "Running User Service via Docker Compose..."
 	docker compose up --build user_service
 
-# Run all services defined in docker-compose.yaml
-up: proto # Ensure protobufs are generated before building
-	@echo "Starting all services via Docker Compose..."
-	docker compose up --build -d # -d for detached mode
-
-# Stop and remove all services defined in docker-compose.yaml
-down:
-	@echo "Stopping and removing all services via Docker Compose..."
-	docker compose down
-
-# Run User Service tests (if you re-add them)
-# test_user_service: proto
+# test_user_service:
 # 	@echo "Running User Service unit tests..."
 # 	python -m unittest discover $(USER_SERVICE_DIR)/tests
 
-# Clean Docker artifacts
-clean_docker:
-	@echo "Cleaning Docker images and containers..."
-	docker stop skillmetrix_user_service || true
-	docker rm skillmetrix_user_service || true
-	docker rmi skillmetrix_user_service || true
-	docker system prune -f --volumes # Prune unused Docker data (use with caution)
+## ====================
+## Go Microservices
+## ====================
+
+build_broker:
+	@echo Building broker binary...
+	chdir .\broker-service && set GOOS=linux&& set GOARCH=amd64&& set CGO_ENABLED=0 && go build -o ${BROKER_BINARY} ./cmd/api
+	@echo Done!
+
+build_auth:
+	@echo Building auth binary...
+	chdir .\authentication-service && set GOOS=linux&& set GOARCH=amd64&& set CGO_ENABLED=0 && go build -o ${AUTH_BINARY} ./cmd/api
+	@echo Done!
+
+build_contact:
+	@echo Building contact binary...
+	chdir .\contact-service && set GOOS=linux&& set GOARCH=amd64&& set CGO_ENABLED=0 && go build -o ${CONTACT_BINARY} ./cmd/api
+	@echo Done!
+
+## ====================
+## Front End
+## ====================
+
+build_front:
+	@echo Building front end binary...
+	chdir .\front-end && set CGO_ENABLED=0&& set GOOS=windows&& go build -o ${FRONT_END_BINARY} ./cmd/web
+	@echo Done!
+
+start: build_front
+	@echo Starting front end...
+	chdir .\front-end && start /B ${FRONT_END_BINARY} &
+
+stop:
+	@echo Stopping front end...
+	@taskkill /IM "${FRONT_END_BINARY}" /F
+	@echo "Stopped front end!"

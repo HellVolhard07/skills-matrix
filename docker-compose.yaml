@@ -1,22 +1,76 @@
+version: '3.8'
+
 services:
-  user_service:
+
+  broker-service:
     build:
-      context: ./user_service # Build context points to the user_service directory
-      dockerfile: Dockerfile  # Specifies the Dockerfile within that context
-    container_name: skillmetrix_user_service
+      context: ./broker-service
+      dockerfile: broker-service.dockerfile
+    restart: always
     ports:
-      - "50052:50052" # Host_port:Container_port
-    volumes:
-      # Optional: Mount your code for easier development (live changes without rebuild)
-      # Comment out for production builds to keep images smaller and immutable
-      - ./user_service:/app/user_service
-    environment:
-      # Example: Set environment variables for logging level if needed
-      PYTHONUNBUFFERED: 1 # Ensures Python output is not buffered
+      - "8080:80"
+    deploy:
+      mode: replicated
+      replicas: 1
     networks:
       - skillmetrix_network
 
-  # Add other services here later (e.g., auth_service, gateway)
+  authentication-service:
+    build:
+      context: ./authentication-service
+      dockerfile: authentication-service.dockerfile
+    restart: always
+    ports:
+      - "8081:80"
+    deploy:
+      mode: replicated
+      replicas: 1
+    networks:
+      - skillmetrix_network
+
+  contact-service:
+    build:
+      context: ./contact-service
+      dockerfile: contact-service.dockerfile
+    restart: always
+    deploy:
+      mode: replicated
+      replicas: 1
+    environment:
+      MAIL_DOMAIN: localhost
+      MAIL_HOST: mailhog
+      MAIL_PORT: 1025
+      MAIL_ENCRYPTION: none
+      MAIL_USERNAME: ""
+      MAIL_PASSWORD: ""
+      FROM_NAME: "John Smith"
+      FROM_ADDRESS: email@example.com
+    networks:
+      - skillmetrix_network
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - skillmetrix_network
+
+  user_service:
+    build:
+      context: ./user_service
+      dockerfile: Dockerfile
+    container_name: skillmetrix_user_service
+    ports:
+      - "50052:50052"
+    volumes:
+      - ./user_service:/app/user_service
+    environment:
+      PYTHONUNBUFFERED: 1
+    networks:
+      - skillmetrix_network
+
+  # Example future gateway service
   # gateway:
   #   build:
   #     context: ./gateway
@@ -27,7 +81,7 @@ services:
   #   volumes:
   #     - ./gateway:/app
   #   depends_on:
-  #     - user_service # Gateway depends on user_service being up
+  #     - user_service
   #   networks:
   #     - skillmetrix_network
 
