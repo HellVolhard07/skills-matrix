@@ -1,38 +1,31 @@
-# user_service/Dockerfile
-
-# Use an official Python runtime as a parent image
+# Base image
 FROM python:3.9-slim-buster
 
-# Set the working directory in the container
+# Set working directory
 WORKDIR /app
 
-# Install necessary gRPC dependencies
-# grpcio requires some build tools, so install them temporarily
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
+# Install system dependencies required for gRPC (for compiling)
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
-    build-essential \
     libffi-dev \
     python3-dev \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy the requirements file and install dependencies
-# This step is often done separately to leverage Docker caching
+# Install Python dependencies early to leverage Docker cache
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Remove build dependencies to make the image smaller
+# Remove unneeded build tools to reduce final image size
 RUN apt-get purge -y gcc build-essential libffi-dev python3-dev && \
     apt-get autoremove -y && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy the entire user_service application directory into the container
-# This copies server.py, handlers.py, mock_db.py, and the generated pb2 files
+# Copy application code
 COPY . .
 
-# Expose the port your gRPC server will listen on
+# Expose gRPC port
 EXPOSE 50052
 
-# Command to run the gRPC server when the container starts
-# Use python -m to ensure package structure is respected
+# Run gRPC server
 CMD ["python", "-m", "user_service.server"]
