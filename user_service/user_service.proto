@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package user;
+
+// User Profile Message
+message UserProfile {
+  string id = 1;
+  string name = 2;
+  string bio = 3;
+  string avatar_url = 4;
+}
+
+// Request to create a new user profile
+message CreateUserProfileRequest {
+  string id = 1; // User ID from Auth Service
+  string name = 2;
+  string bio = 3;
+  string avatar_url = 4;
+}
+
+// Request to update an existing user profile
+message UpdateUserProfileRequest {
+  string id = 1; // User ID
+  string name = 2;
+  string bio = 3;
+  string avatar_url = 4;
+}
+
+// Request to get a user profile by ID
+message GetUserProfileRequest {
+  string id = 1; // User ID
+}
+
+// User Service Definition
+service UserService {
+  rpc CreateUserProfile(CreateUserProfileRequest) returns (UserProfile);
+  rpc UpdateUserProfile(UpdateUserProfileRequest) returns (UserProfile);
+  rpc GetUserProfile(GetUserProfileRequest) returns (UserProfile);
+}
