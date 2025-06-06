@@ -25,8 +25,8 @@ type AuthPayload struct {
 }
 
 type ContactPayload struct {
-	SenderId   string `json:"sender"`
-	ReceiverId string `json:"receiver"`
+	SenderId   string `json:"senderid"`
+	ReceiverId string `json:"receiverid"`
 	Subject    string `json:"subject"`
 	Message    string `json:"message"`
 }

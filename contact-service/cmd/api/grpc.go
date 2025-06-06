@@ -4,37 +4,33 @@ import (
 	"contact/contact"
 	"context"
 	"fmt"
-	"log"
-	"net"
-
-	"google.golang.org/grpc"
+	"os"
 )
 
 type ContactServer struct {
 	contact.UnimplementedContactServiceServer
+	Mailer Mailer
 }
 
 func (c *ContactServer) SendContactRequest(ctx context.Context, req *contact.ContactRequest) (*contact.ContactResponse, error) {
-	// TODO: Implement sending email here
+	msg := Message{
+		From:    os.Getenv("FROM_ADDRESS"),
+		To:      req.ReceiverId,
+		Subject: req.Subject,
+		Data:    req.Message,
+	}
+
+	err := c.Mailer.SendSMTPMessage(msg)
+	if err != nil {
+		return &contact.ContactResponse{
+			Error:   err.Error(),
+			Message: "",
+		}, nil
+	}
+
 	res := &contact.ContactResponse{
 		Error:   "",
-		Message: "Email sent to xyz.com",
+		Message: fmt.Sprintf("Email sent to %s", req.ReceiverId),
 	}
-
 	return res, nil
-}
-
-func (app *ContactConfig) gRPCListen() {
-	listen, err := net.Listen("tcp", fmt.Sprintf(":%s", gRPCPort))
-	if err != nil {
-		log.Fatalf("Failed to listen to gRPC: %v", err)
-	}
-
-	s := grpc.NewServer()
-	contact.RegisterContactServiceServer(s, &ContactServer{})
-
-	log.Printf("gRPC server started on port: %s", gRPCPort)
-	if err := s.Serve(listen); err != nil {
-		log.Fatalf("Failed to listen to gRPC: %v", err)
-	}
 }
