@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package search;
+
+option go_package = "/search";
+
+service SearchService {
+  rpc SearchUsersBySkill (SearchRequest) returns (UserSearchResults);
+}
+
+message User {
+  string id = 1;
+  string name = 2;
+  string department = 3;
+  repeated string skills = 4;
+}
+
+message SearchRequest {
+  string skill_name = 1;
+  string category = 2;
+  string proficiency = 3;
+}
+
+message UserSearchResults {
+  repeated User users = 1;
+}

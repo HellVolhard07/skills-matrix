@@ -2,6 +2,7 @@ package main
 
 import (
 	"broker/contact"
+	"broker/search"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -17,6 +18,7 @@ type RequestPayload struct {
 	Action  string         `json:"action"`
 	Auth    AuthPayload    `json:"auth,omitempty"`
 	Contact ContactPayload `json:"contact,omitempty"`
+	Search  SearchPayload  `json:"search,omiempty"`
 }
 
 type AuthPayload struct {
@@ -29,6 +31,12 @@ type ContactPayload struct {
 	ReceiverId string `json:"receiverid"`
 	Subject    string `json:"subject"`
 	Message    string `json:"message"`
+}
+
+type SearchPayload struct {
+	SkillName   string `json:"skillname"`
+	Category    string `json:"category"`
+	Proficiency string `json:"proficiency"`
 }
 
 func (app *Config) HandleRequest(w http.ResponseWriter, r *http.Request) {
@@ -45,6 +53,8 @@ func (app *Config) HandleRequest(w http.ResponseWriter, r *http.Request) {
 		app.authenticate(w, requestPayload.Auth)
 	case "contact":
 		app.contactHandler(w, requestPayload.Contact)
+	case "search":
+		app.searchHandler(w, requestPayload.Search)
 	default:
 		app.errorJSON(w, errors.New("unknown action"))
 	}
@@ -129,6 +139,52 @@ func (app *Config) contactHandler(w http.ResponseWriter, cp ContactPayload) {
 	payload := jsonResponse{
 		Error:   false,
 		Message: "Email sent",
+	}
+
+	app.writeJSON(w, http.StatusAccepted, payload)
+}
+
+func (app *Config) searchHandler(w http.ResponseWriter, s SearchPayload) {
+	conn, err := grpc.NewClient("search-service:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+	defer conn.Close()
+
+	c := search.NewSearchServiceClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	res, err := c.SearchUsersBySkill(ctx, &search.SearchRequest{
+		SkillName:   s.SkillName,
+		Category:    s.Category,
+		Proficiency: s.Proficiency,
+	})
+
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+
+	// Optionally convert the gRPC Users to a format that's JSON-friendly
+	users := make([]map[string]any, len(res.Users))
+	for i, u := range res.Users {
+		skills := make([]string, len(u.Skills))
+		copy(skills, u.Skills)
+		users[i] = map[string]any{
+			"id":         u.Id,
+			"name":       u.Name,
+			"department": u.Department,
+			"skills":     skills,
+		}
+	}
+
+	payload := jsonResponse{
+		Error:   false,
+		Message: "Search results retrieved",
+		Data:    users,
 	}
 
 	app.writeJSON(w, http.StatusAccepted, payload)

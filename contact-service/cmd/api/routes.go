@@ -22,8 +22,5 @@ func (app *ContactConfig) routes() http.Handler {
 	}))
 
 	mux.Use(middleware.Heartbeat("/ping"))
-
-	// mux.Post("/contact", app.Contact)
-
 	return mux
 }
