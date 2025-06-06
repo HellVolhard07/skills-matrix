@@ -264,7 +264,7 @@ func (app *Config) userHandler(w http.ResponseWriter, u UserPayload) {
 
 	payload := jsonResponse{
 		Error:   false,
-		Message: "User created",
+		Message: "User fetched",
 		Data:    res,
 	}
 
