@@ -51,6 +51,17 @@ services:
       mode: replicated
       replicas: 1
 
+  user-service:
+    build:
+      context: ./user-service
+      dockerfile: /user-service.dockerfile
+    restart: always
+    ports:
+      - "50052:50052"
+    deploy:
+      mode: replicated
+      replicas: 1
+
   mailhog:
     image: 'mailhog/mailhog:latest'
     ports:

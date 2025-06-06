@@ -3,6 +3,7 @@ package main
 import (
 	"broker/contact"
 	"broker/search"
+	"broker/user"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -18,7 +19,8 @@ type RequestPayload struct {
 	Action  string         `json:"action"`
 	Auth    AuthPayload    `json:"auth,omitempty"`
 	Contact ContactPayload `json:"contact,omitempty"`
-	Search  SearchPayload  `json:"search,omiempty"`
+	Search  SearchPayload  `json:"search,omitempty"`
+	User    UserPayload    `json:"user,omitempty"`
 }
 
 type AuthPayload struct {
@@ -39,6 +41,31 @@ type SearchPayload struct {
 	Proficiency string `json:"proficiency"`
 }
 
+type UserPayload struct {
+	Type   string            `json:"type"` // create/update/get
+	Create CreateUserPayload `json:"create,omitempty"`
+	Update UpdateUserPayload `json:"update,omitempty"`
+	Get    GetUserPayload    `json:"get,omitempty"`
+}
+
+type CreateUserPayload struct {
+	Id        string `json:"id"`
+	Name      string `json:"name"`
+	Bio       string `json:"bio"`
+	AvatarUrl string `json:"avatar"`
+}
+
+type UpdateUserPayload struct {
+	Id        string `json:"id"`
+	Name      string `json:"name"`
+	Bio       string `json:"bio"`
+	AvatarUrl string `json:"avatar"`
+}
+
+type GetUserPayload struct {
+	Id string `json:"id"`
+}
+
 func (app *Config) HandleRequest(w http.ResponseWriter, r *http.Request) {
 	var requestPayload RequestPayload
 
@@ -55,6 +82,8 @@ func (app *Config) HandleRequest(w http.ResponseWriter, r *http.Request) {
 		app.contactHandler(w, requestPayload.Contact)
 	case "search":
 		app.searchHandler(w, requestPayload.Search)
+	case "user":
+		app.userHandler(w, requestPayload.User)
 	default:
 		app.errorJSON(w, errors.New("unknown action"))
 	}
@@ -185,6 +214,58 @@ func (app *Config) searchHandler(w http.ResponseWriter, s SearchPayload) {
 		Error:   false,
 		Message: "Search results retrieved",
 		Data:    users,
+	}
+
+	app.writeJSON(w, http.StatusAccepted, payload)
+}
+
+func (app *Config) userHandler(w http.ResponseWriter, u UserPayload) {
+	conn, err := grpc.NewClient("user-service:50052", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+	defer conn.Close()
+
+	c := user.NewUserServiceClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var res *user.UserProfile
+
+	switch u.Type {
+	case "create":
+		res, err = c.CreateUserProfile(ctx, &user.CreateUserProfileRequest{
+			Id:        u.Create.Id,
+			Name:      u.Create.Name,
+			Bio:       u.Create.Bio,
+			AvatarUrl: u.Create.AvatarUrl,
+		})
+	case "update":
+		res, err = c.UpdateUserProfile(ctx, &user.UpdateUserProfileRequest{
+			Id:        u.Update.Id,
+			Name:      u.Update.Name,
+			Bio:       u.Update.Bio,
+			AvatarUrl: u.Update.AvatarUrl,
+		})
+	case "get":
+		res, err = c.GetUserProfile(ctx, &user.GetUserProfileRequest{
+			Id: u.Get.Id,
+		})
+	default:
+		err = errors.New("incorrect input")
+	}
+
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+
+	payload := jsonResponse{
+		Error:   false,
+		Message: "User created",
+		Data:    res,
 	}
 
 	app.writeJSON(w, http.StatusAccepted, payload)
