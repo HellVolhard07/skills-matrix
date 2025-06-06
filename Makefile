@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 .PHONY: build_user_service run_user_service_local run_user_service_docker test_user_service clean_docker \
         build_broker build_auth build_contact build_front start stop up up_build down
 
@@ -89,3 +90,5 @@ stop:
 	@echo Stopping front end...
 	@taskkill /IM "${FRONT_END_BINARY}" /F
 	@echo "Stopped front end!"
+=======
+>>>>>>> 86a1e051fa56b74af45487995c66a00cc3fab704
