@@ -1,0 +1,324 @@
+package main
+
+import (
+	"broker/contact"
+	"broker/search"
+	"broker/skills"
+	"broker/user"
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"time"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+)
+
+type RequestPayload struct {
+	Action  string         `json:"action"`
+	Auth    AuthPayload    `json:"auth,omitempty"`
+	Contact ContactPayload `json:"contact,omitempty"`
+	Search  SearchPayload  `json:"search,omitempty"`
+	User    UserPayload    `json:"user,omitempty"`
+	Skill   SkillPayload   `json:"skill,omitempty"`
+}
+
+type AuthPayload struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type SkillPayload struct {
+	UserId string `json:"userid"`
+	Skill  Skill  `json:"skill"`
+}
+
+type Skill struct {
+	Id          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"desc"`
+}
+
+type ContactPayload struct {
+	SenderId   string `json:"senderid"`
+	ReceiverId string `json:"receiverid"`
+	Subject    string `json:"subject"`
+	Message    string `json:"message"`
+}
+
+type SearchPayload struct {
+	SkillName   string `json:"skillname"`
+	Category    string `json:"category"`
+	Proficiency string `json:"proficiency"`
+}
+
+type UserPayload struct {
+	Type   string            `json:"type"` // create/update/get
+	Create CreateUserPayload `json:"create,omitempty"`
+	Update UpdateUserPayload `json:"update,omitempty"`
+	Get    GetUserPayload    `json:"get,omitempty"`
+}
+
+type CreateUserPayload struct {
+	Id        string `json:"id"`
+	Name      string `json:"name"`
+	Bio       string `json:"bio"`
+	AvatarUrl string `json:"avatar"`
+}
+
+type UpdateUserPayload struct {
+	Id        string `json:"id"`
+	Name      string `json:"name"`
+	Bio       string `json:"bio"`
+	AvatarUrl string `json:"avatar"`
+}
+
+type GetUserPayload struct {
+	Id string `json:"id"`
+}
+
+func (app *Config) HandleRequest(w http.ResponseWriter, r *http.Request) {
+	var requestPayload RequestPayload
+
+	err := app.readJSON(w, r, &requestPayload)
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+
+	switch requestPayload.Action {
+	case "auth":
+		app.authenticate(w, requestPayload.Auth)
+	case "contact":
+		app.contactHandler(w, requestPayload.Contact)
+	case "search":
+		app.searchHandler(w, requestPayload.Search)
+	case "user":
+		app.userHandler(w, requestPayload.User)
+	case "skill":
+		app.skillHandler(w, requestPayload.Skill)
+	default:
+		app.errorJSON(w, errors.New("unknown action"))
+	}
+}
+
+func (app *Config) authenticate(w http.ResponseWriter, a AuthPayload) {
+	// create some json we will send to the auth microservice
+	jsonData, _ := json.MarshalIndent(a, "", "\t")
+
+	request, err := http.NewRequest("POST", "http://authentication-service/authenticate", bytes.NewBuffer(jsonData))
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+
+	client := &http.Client{}
+	response, err := client.Do(request)
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+
+	defer response.Body.Close()
+
+	if response.StatusCode == http.StatusUnauthorized {
+		app.errorJSON(w, errors.New("invalid credentials"))
+		return
+	} else if response.StatusCode != http.StatusAccepted {
+		app.errorJSON(w, errors.New("error calling auth service"))
+		return
+	}
+
+	// create a variable to read response.Body into
+	var jsonFromService jsonResponse
+
+	// decode json from auth-service
+	err = json.NewDecoder(response.Body).Decode(&jsonFromService)
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+
+	if jsonFromService.Error {
+		app.errorJSON(w, err, http.StatusUnauthorized)
+		return
+	}
+
+	payload := jsonResponse{
+		Error:   false,
+		Message: "Authenticated",
+		Data:    jsonFromService.Data,
+	}
+
+	app.writeJSON(w, http.StatusAccepted, payload)
+}
+
+func (app *Config) contactHandler(w http.ResponseWriter, cp ContactPayload) {
+
+	conn, err := grpc.NewClient("contact-service:50001", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+	defer conn.Close()
+
+	c := contact.NewContactServiceClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err = c.SendContactRequest(ctx, &contact.ContactRequest{
+		SenderId:   cp.SenderId,
+		ReceiverId: cp.ReceiverId,
+		Subject:    cp.Subject,
+		Message:    cp.Message,
+	})
+
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+
+	payload := jsonResponse{
+		Error:   false,
+		Message: "Email sent",
+	}
+
+	app.writeJSON(w, http.StatusAccepted, payload)
+}
+
+func (app *Config) searchHandler(w http.ResponseWriter, s SearchPayload) {
+	conn, err := grpc.NewClient("search-service:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+	defer conn.Close()
+
+	c := search.NewSearchServiceClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	res, err := c.SearchUsersBySkill(ctx, &search.SearchRequest{
+		SkillName:   s.SkillName,
+		Category:    s.Category,
+		Proficiency: s.Proficiency,
+	})
+
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+
+	// Optionally convert the gRPC Users to a format that's JSON-friendly
+	users := make([]map[string]any, len(res.Users))
+	for i, u := range res.Users {
+		skills := make([]string, len(u.Skills))
+		copy(skills, u.Skills)
+		users[i] = map[string]any{
+			"id":         u.Id,
+			"name":       u.Name,
+			"department": u.Department,
+			"skills":     skills,
+		}
+	}
+
+	payload := jsonResponse{
+		Error:   false,
+		Message: "Search results retrieved",
+		Data:    users,
+	}
+
+	app.writeJSON(w, http.StatusAccepted, payload)
+}
+
+func (app *Config) userHandler(w http.ResponseWriter, u UserPayload) {
+	conn, err := grpc.NewClient("user-service:50052", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+	defer conn.Close()
+
+	c := user.NewUserServiceClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var res *user.UserProfile
+
+	switch u.Type {
+	case "create":
+		res, err = c.CreateUserProfile(ctx, &user.CreateUserProfileRequest{
+			Id:        u.Create.Id,
+			Name:      u.Create.Name,
+			Bio:       u.Create.Bio,
+			AvatarUrl: u.Create.AvatarUrl,
+		})
+	case "update":
+		res, err = c.UpdateUserProfile(ctx, &user.UpdateUserProfileRequest{
+			Id:        u.Update.Id,
+			Name:      u.Update.Name,
+			Bio:       u.Update.Bio,
+			AvatarUrl: u.Update.AvatarUrl,
+		})
+	case "get":
+		res, err = c.GetUserProfile(ctx, &user.GetUserProfileRequest{
+			Id: u.Get.Id,
+		})
+	default:
+		err = errors.New("incorrect input")
+	}
+
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+
+	payload := jsonResponse{
+		Error:   false,
+		Message: "User fetched",
+		Data:    res,
+	}
+
+	app.writeJSON(w, http.StatusAccepted, payload)
+}
+
+func (app *Config) skillHandler(w http.ResponseWriter, s SkillPayload) {
+
+	// Only handling add skill
+	conn, err := grpc.NewClient("skills-service:50053", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+	defer conn.Close()
+
+	c := skills.NewSkillServiceClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	res, err := c.AddSkillToUser(ctx, &skills.AddSkillRequest{
+		UserId: s.UserId,
+		Skill: &skills.Skill{
+			Id:          s.Skill.Id,
+			Name:        s.Skill.Name,
+			Description: s.Skill.Description,
+		},
+	})
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+
+	payload := jsonResponse{
+		Error:   false,
+		Message: "Skill added",
+		Data:    res,
+	}
+
+	app.writeJSON(w, http.StatusAccepted, payload)
+}
