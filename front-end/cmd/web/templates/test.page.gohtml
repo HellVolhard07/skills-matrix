@@ -10,6 +10,7 @@
                 <a id="contactBtn" class="btn btn-outline-secondary" href="javascript:void(0);">Test Contact</a>
                 <a id="searchBtn" class="btn btn-outline-secondary" href="javascript:void(0);">Test Search</a>
                 <a id="userBtn" class="btn btn-outline-secondary" href="javascript:void(0);">Test User</a>
+                <a id="skillBtn" class="btn btn-outline-secondary" href="javascript:void(0);">Test Skills</a>
                 <div id="output" class="mt-5" style="outline: 1px solid silver; padding: 2em;">
                     <span class="text-muted">Output shows here...</span>
                 </div>
@@ -157,6 +158,45 @@
                 type: "get",
                 get: {
                     id: "user123",
+                }
+            }
+        }
+
+        const headers = new Headers();
+        headers.append("Content-Type", "application/json");
+
+        const body = {
+            method: 'POST',
+            body: JSON.stringify(payload),
+            headers: headers,
+        }
+
+        fetch("http:\/\/localhost:8080/handle", body)
+        .then((response) => response.json())
+        .then((data) => {
+            sent.innerHTML = JSON.stringify(payload, undefined, 4);
+            received.innerHTML = JSON.stringify(data, undefined, 4);
+            if (data.error) {
+                output.innerHTML += `<br><strong>Error:</strong> ${data.message}`;
+            } else {
+                output.innerHTML += `<br><strong>Response from broker service</strong>: ${data.message}`;
+            }
+        })
+        .catch((error) => {
+            output.innerHTML += "<br><br>Eror: " + error;
+        })
+    })
+
+    skillBtn.addEventListener("click", function() {
+
+        const payload = {
+            action: "skill",
+            skill: {
+                userid: "user123",
+                skill: {
+                    id: "1",
+                    name: "Skill 1",
+                    desc:"Testing skill 1",
                 }
             }
         }

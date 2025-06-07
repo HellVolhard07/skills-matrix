@@ -3,30 +3,20 @@ package main
 import (
 	"context"
 	"log"
-	"net"
+	"skills/skills"
 
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-
-	skillpb "google.golang.org/grpc/SKILLS_MTRX/protobuf" // Adjust this import path
 )
 
 // server implements the SkillServiceServer interface
-type server struct {
-	userSkills                              map[string][]*skillpb.Skill
-	allSkills                               map[string]*skillpb.Skill
-	skillpb.UnimplementedSkillServiceServer // Embed this for forward compatibility
+type SkillsServer struct {
+	skills.UnimplementedSkillServiceServer
+	userSkills map[string][]*skills.Skill
+	allSkills  map[string]*skills.Skill
 }
 
-func NewSkillServiceServer() *server {
-	return &server{
-		userSkills: make(map[string][]*skillpb.Skill),
-		allSkills:  make(map[string]*skillpb.Skill),
-	}
-}
-
-func (s *server) AddSkillToUser(ctx context.Context, req *skillpb.AddSkillRequest) (*skillpb.Skill, error) {
+func (s *SkillsServer) AddSkillToUser(ctx context.Context, req *skills.AddSkillRequest) (*skills.Skill, error) {
 	log.Printf("AddSkillToUser called for user: %s, skill: %s", req.GetUserId(), req.GetSkill().GetName())
 
 	// Basic validation
@@ -40,7 +30,7 @@ func (s *server) AddSkillToUser(ctx context.Context, req *skillpb.AddSkillReques
 	return req.GetSkill(), nil
 }
 
-func (s *server) RemoveSkillFromUser(ctx context.Context, req *skillpb.RemoveSkillRequest) (*skillpb.Empty, error) {
+func (s *SkillsServer) RemoveSkillFromUser(ctx context.Context, req *skills.RemoveSkillRequest) (*skills.Empty, error) {
 	log.Printf("RemoveSkillFromUser called for user: %s, skill ID: %s", req.GetUserId(), req.GetSkillId())
 
 	if req.GetUserId() == "" || req.GetSkillId() == "" {
@@ -62,47 +52,31 @@ func (s *server) RemoveSkillFromUser(ctx context.Context, req *skillpb.RemoveSki
 		return nil, status.Errorf(codes.NotFound, "skill with ID %s not found for user %s", req.GetSkillId(), req.GetUserId())
 	}
 
-	return &skillpb.Empty{}, nil
+	return &skills.Empty{}, nil
 }
 
-func (s *server) GetSkillsByUser(ctx context.Context, req *skillpb.GetSkillsByUserRequest) (*skillpb.SkillList, error) {
+func (s *SkillsServer) GetSkillsByUser(ctx context.Context, req *skills.GetSkillsByUserRequest) (*skills.SkillList, error) {
 	log.Printf("GetSkillsByUser called for user: %s", req.GetUserId())
 
 	if req.GetUserId() == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "user_id cannot be empty")
 	}
 
-	skills, ok := s.userSkills[req.GetUserId()]
+	skillList, ok := s.userSkills[req.GetUserId()]
 	if !ok {
-		return &skillpb.SkillList{Skills: []*skillpb.Skill{}}, nil // Return empty list if no skills
+		return &skills.SkillList{Skills: []*skills.Skill{}}, nil // Return empty list if no skills
 	}
 
-	return &skillpb.SkillList{Skills: skills}, nil
+	return &skills.SkillList{Skills: skillList}, nil
 }
 
-func (s *server) GetAllSkills(ctx context.Context, req *skillpb.Empty) (*skillpb.SkillList, error) {
+func (s *SkillsServer) GetAllSkills(ctx context.Context, req *skills.Empty) (*skills.SkillList, error) {
 	log.Println("GetAllSkills called")
 
-	var allSkills []*skillpb.Skill
+	var allSkills []*skills.Skill
 	for _, skill := range s.allSkills {
 		allSkills = append(allSkills, skill)
 	}
 
-	return &skillpb.SkillList{Skills: allSkills}, nil
-}
-
-// Main function to run the gRPC server
-func main() {
-	lis, err := net.Listen("tcp", ":50051") // Listen on port 50051
-	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
-	}
-
-	s := grpc.NewServer()
-	skillpb.RegisterSkillServiceServer(s, NewSkillServiceServer())
-
-	log.Printf("server listening at %v", lis.Addr())
-	if err := s.Serve(lis); err != nil {
-		log.Fatalf("failed to serve: %v", err)
-	}
+	return &skills.SkillList{Skills: allSkills}, nil
 }

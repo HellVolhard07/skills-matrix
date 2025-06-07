@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-option go_package = "." ;// Adjust this path as needed
+package skills;
 
-package skill;
+option go_package = "/skills" ;// Adjust this path as needed
 
 // Represents a single skill
 message Skill {

@@ -3,6 +3,7 @@ package main
 import (
 	"broker/contact"
 	"broker/search"
+	"broker/skills"
 	"broker/user"
 	"bytes"
 	"context"
@@ -21,11 +22,23 @@ type RequestPayload struct {
 	Contact ContactPayload `json:"contact,omitempty"`
 	Search  SearchPayload  `json:"search,omitempty"`
 	User    UserPayload    `json:"user,omitempty"`
+	Skill   SkillPayload   `json:"skill,omitempty"`
 }
 
 type AuthPayload struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
+}
+
+type SkillPayload struct {
+	UserId string `json:"userid"`
+	Skill  Skill  `json:"skill"`
+}
+
+type Skill struct {
+	Id          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"desc"`
 }
 
 type ContactPayload struct {
@@ -84,6 +97,8 @@ func (app *Config) HandleRequest(w http.ResponseWriter, r *http.Request) {
 		app.searchHandler(w, requestPayload.Search)
 	case "user":
 		app.userHandler(w, requestPayload.User)
+	case "skill":
+		app.skillHandler(w, requestPayload.Skill)
 	default:
 		app.errorJSON(w, errors.New("unknown action"))
 	}
@@ -265,6 +280,43 @@ func (app *Config) userHandler(w http.ResponseWriter, u UserPayload) {
 	payload := jsonResponse{
 		Error:   false,
 		Message: "User fetched",
+		Data:    res,
+	}
+
+	app.writeJSON(w, http.StatusAccepted, payload)
+}
+
+func (app *Config) skillHandler(w http.ResponseWriter, s SkillPayload) {
+
+	// Only handling add skill
+	conn, err := grpc.NewClient("skills-service:50053", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+	defer conn.Close()
+
+	c := skills.NewSkillServiceClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	res, err := c.AddSkillToUser(ctx, &skills.AddSkillRequest{
+		UserId: s.UserId,
+		Skill: &skills.Skill{
+			Id:          s.Skill.Id,
+			Name:        s.Skill.Name,
+			Description: s.Skill.Description,
+		},
+	})
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+
+	payload := jsonResponse{
+		Error:   false,
+		Message: "Skill added",
 		Data:    res,
 	}
 
